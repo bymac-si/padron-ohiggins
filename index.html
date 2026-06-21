@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Padrón O'Higgins</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    :root { --primary: #041e31; --bg: #f0f2f5; }
+    body { background-color: var(--bg); font-family: 'Segoe UI', sans-serif; min-height: 100vh; -webkit-overflow-scrolling: touch; }
+    .app-header { background: var(--primary); color: white; padding: 15px; text-align: center; }
+    .card-militante { border: none; border-radius: 12px; margin-bottom: 12px; cursor: pointer; transition: 0.2s; border-left: 4px solid var(--primary); }
+    
+    .semaforo-seguro { background-color: #d1e7dd !important; color: #0f5132 !important; }
+    .semaforo-indeciso { background-color: #fff3cd !important; color: #664d03 !important; }
+    .semaforo-oposicion { background-color: #f8d7da !important; color: #842029 !important; }
+    .semaforo-novota { background-color: #e2e3e5 !important; color: #41464b !important; }
+
+    #vista-detalle { display: none; background: white; min-height: 100vh; padding: 20px; }
+    .btn-circle { width: 55px; height: 55px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; text-decoration: none; font-size: 1.5rem; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .bg-wa { background: #25d366; } .bg-mail { background: #ea4335; } .bg-print { background: #6c757d; }
+    .info-label { font-size: 0.75rem; color: #70757a; text-transform: uppercase; font-weight: bold; }
+    .info-value { font-size: 1rem; color: #202124; margin-bottom: 12px; border-bottom: 1px solid #eee; }
+    #formulario-edicion { display: none; }
+  </style>
+</head>
+<body>
+
+  <div id="vista-lista">
+    <div class="app-header"> 
+      <img src="https://partidorepublicanodechile.cl/wp-content/themes/partido-republicano/img/logo-blanco.svg" alt="" style="width:120px; display:block; margin: 20px auto 10px;">
+      <h4>Padrón O'Higgins</h4>
+    </div>
+    <div class="container mt-3">
+      <input type="text" id="buscador" class="form-control mb-3" placeholder="🔍 Buscar por Nombre, Comuna, ID..." onkeyup="filtrar()">
+      <div id="lista" class="row">
+        <div class="text-center mt-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Descargando padrón desde la nube...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="vista-detalle">
+    <div class="container">
+      <div onclick="cerrarDetalle()" class="text-primary mb-3" style="cursor:pointer; font-size: 1.1rem; padding: 5px 0;">
+        <i class="fas fa-arrow-left"></i> Volver
+      </div>
+      
+      <div id="cabecera-ficha" class="p-3 rounded-3 text-center mb-4">
+        <div id="nombre-ficha"></div>
+      </div>
+
+      <div class="d-flex justify-content-center gap-4 mb-4">
+        <a id="lnk-wa" href="#" target="_blank" class="btn-circle bg-wa"><i class="fab fa-whatsapp"></i></a>
+        <a id="lnk-mail" href="#" class="btn-circle bg-mail"><i class="far fa-envelope"></i></a>
+        <div onclick="window.print()" class="btn-circle bg-print" style="cursor:pointer"><i class="fas fa-print"></i></div>
+      </div>
+
+      <div id="bloque-visualizacion">
+        <div id="datos-ficha" class="row bg-light p-3 rounded-3 mb-4"></div>
+        <button class="btn btn-warning w-100 mb-4 py-2" onclick="habilitarEdicion()"><i class="fas fa-edit"></i> Editar Ficha / Semáforo</button>
+      </div>
+
+      <div id="formulario-edicion" class="bg-light p-3 rounded-3 mb-4">
+        <h5>Editar Registro</h5>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Semáforo Político</label>
+          <select id="edit-semaforo" class="form-select">
+            <option value="">Sin Clasificar</option>
+            <option value="SEGURO">SEGURO</option>
+            <option value="INDECISO">INDECISO</option>
+            <option value="OPOSICION">OPOSICIÓN</option>
+            <option value="NO VOTA">NO VOTA</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Gestionó</label>
+          <select id="edit-gestiono" class="form-select">
+            <option value="">Nadie</option>
+            <option value="P. BESA">P. BESA</option>
+            <option value="M. DONOSO">M. DONOSO</option>
+            <option value="P. MEZA">P. MEZA</option>
+            <option value="P. ZÚÑIGA">P. ZÚÑIGA</option>
+            <option value="O. DINAMARCA">O. DINAMARCA</option>
+            <option value="F. TAGLE">F. TAGLE</option>
+            <option value="M. CASTRO">M. CASTRO</option>
+            <option value="M. BRICEÑO">M. BRICEÑO</option>
+            <option value="T. LABBÉ">T. LABBÉ</option>
+            <option value="A. MORALES">A. MORALES</option>
+            <option value="N. LIRA">N. LIRA</option>
+            <option value="J. MACKAY">J. MACKAY</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Teléfono</label>
+          <input type="text" id="edit-telefono" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Mail</label>
+          <input type="email" id="edit-mail-input" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Domicilio</label>
+          <input type="text" id="edit-domicilio" class="form-control">
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-success flex-grow-1" onclick="guardarCambios()">Guardar</button>
+          <button class="btn btn-secondary" onclick="cancelarEdicion()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // REEMPLAZA ESTA URL POR LA DE TU APLICACIÓN WEB DE GOOGLE APPS SCRIPT
+    const API_URL = "CONECTA_AQUÍ_LA_URL_DE_TU_APLICACION_WEB";
+
+    let rawData = [];
+    let milActual = null;
+    let ultimaPosicionScroll = 0;
+
+    window.onload = () => {
+      cargarDatosDesdeServidor();
+    };
+
+    function cargarDatosDesdeServidor() {
+      fetch(`${API_URL}?action=read`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) { alert("Error de origen: " + data.error); return; }
+          rawData = data;
+          render(data);
+        })
+        .catch(err => alert("Error de conexión al servidor: " + err));
+    }
+
+    function obtenerClaseSemaforo(estado) {
+      if (!estado) return '';
+      const est = estado.toUpperCase().trim();
+      if (est === 'SEGURO') return 'semaforo-seguro';
+      if (est === 'INDECISO') return 'semaforo-indeciso';
+      if (est === 'OPOSICION' || est === 'OPOSICIÓN') return 'semaforo-oposicion';
+      if (est === 'NO VOTA') return 'semaforo-novota';
+      return '';
+    }
+
+    function render(data) {
+      const lista = document.getElementById('lista');
+      if (!data || data.length === 0) {
+        lista.innerHTML = '<div class="text-center mt-5"><p class="text-muted">No se encontraron registros.</p></div>';
+        return;
+      }
+
+      lista.innerHTML = data.map(m => {
+        const claseColor = obtenerClaseSemaforo(m.SEMAFORO);
+        return `
+          <div class="col-12 col-md-6">
+            <div class="card card-militante shadow-sm ${claseColor}" onclick="verFicha('${m.ID}')">
+              <div class="card-body">
+                <h6 class="mb-0 fw-bold">${m.NOMBRE || ''}</h6>
+                <small class="${claseColor ? '' : 'text-muted'}">${m.COMUNA || ''} | RUT: ${m.ID || ''}</small>
+                ${m.SEMAFORO ? `<br><span class="badge bg-dark mt-1">${m.SEMAFORO}</span>` : ''}
+                ${m.GESTIONO ? `<span class="badge bg-secondary mt-1 ms-1">${m.GESTIONO}</span>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function verFicha(id) {
+      ultimaPosicionScroll = window.scrollY;
+      milActual = rawData.find(m => m.ID === id);
+      if (!milActual) return;
+      
+      cancelarEdicion();
+
+      const cabecera = document.getElementById('cabecera-ficha');
+      cabecera.className = "p-3 rounded-3 text-center mb-4 " + obtenerClaseSemaforo(milActual.SEMAFORO);
+      
+      document.getElementById('nombre-ficha').innerHTML = `<h3 class="mb-0">${milActual.NOMBRE || ''}</h3><p class="mb-0 opacity-75">N°: ${milActual.N || ''} | RUT: ${milActual.ID || ''}</p>`;
+      
+      document.getElementById('lnk-wa').href = "https://wa.me/" + (milActual.TELEFONO || '');
+      document.getElementById('lnk-mail').href = "mailto:" + (milActual.MAIL || '');
+
+      document.getElementById('datos-ficha').innerHTML = `
+        <div class="col-6"><div class="info-label">Región / Dist.</div><div class="info-value">${milActual.REGION || ''} - D${milActual.DIST || ''}</div></div>
+        <div class="col-6"><div class="info-label">Comuna</div><div class="info-value">${milActual.COMUNA || ''}</div></div>
+        <div class="col-6"><div class="info-label">Cédula / DV</div><div class="info-value">${milActual.CEDULA || ''}-${milActual.DV || ''}</div></div>
+        <div class="col-6"><div class="info-label">Sexo / Edad</div><div class="info-value">${milActual.SEXO || ''} (${milActual.EDAD || ''} años)</div></div>
+        <div class="col-12"><div class="info-label">Domicilio</div><div class="info-value">${milActual.DOMICILIO || ''}</div></div>
+        <div class="col-6"><div class="info-label">F. Militancia</div><div class="info-value">${milActual['F MILITANCIA'] || ''}</div></div>
+        <div class="col-6"><div class="info-label">Tiempo Militancia</div><div class="info-value">${milActual['TIEMPO MILITANCIA'] || ''}</div></div>
+        <div class="col-6"><div class="info-label">Teléfono</div><div class="info-value">${milActual.TELEFONO || ''}</div></div>
+        <div class="col-6"><div class="info-label">Mail</div><div class="info-value">${milActual.MAIL || ''}</div></div>
+        <div class="col-6"><div class="info-label">Gestionó</div><div class="info-value fw-bold text-primary">${milActual.GESTIONO || 'SIN ASIGNAR'}</div></div>
+        <div class="col-6"><div class="info-label">Estado Semáforo</div><div class="info-value fw-bold">${milActual.SEMAFORO || 'SIN CLASIFICAR'}</div></div>
+      `;
+
+      document.getElementById('vista-lista').style.display = 'none';
+      document.getElementById('vista-detalle').style.display = 'block';
+      window.scrollTo(0, 0);
+    }
+
+    function habilitarEdicion() {
+      document.getElementById('edit-semaforo').value = milActual.SEMAFORO || '';
+      document.getElementById('edit-gestiono').value = milActual.GESTIONO || '';
+      document.getElementById('edit-telefono').value = milActual.TELEFONO || '';
+      document.getElementById('edit-mail-input').value = milActual.MAIL || '';
+      document.getElementById('edit-domicilio').value = milActual.DOMICILIO || '';
+
+      document.getElementById('bloque-visualizacion').style.display = 'none';
+      document.getElementById('formulario-edicion').style.display = 'block';
+    }
+
+    function cancelarEdicion() {
+      document.getElementById('bloque-visualizacion').style.display = 'block';
+      document.getElementById('formulario-edicion').style.display = 'none';
+    }
+
+    function guardarCambios() {
+      const datosModificados = {
+        ID: milActual.ID,
+        SEMAFORO: document.getElementById('edit-semaforo').value,
+        GESTIONO: document.getElementById('edit-gestiono').value,
+        TELEFONO: document.getElementById('edit-telefono').value,
+        MAIL: document.getElementById('edit-mail-input').value,
+        DOMICILIO: document.getElementById('edit-domicilio').value
+      };
+
+      const contenedorForm = document.getElementById('formulario-edicion');
+      contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Inyectando cambios en base central...</p></div>';
+
+      fetch(API_URL, {
+        method: "POST",
+        mode: "no-cors", // Evita problemas de políticas CORS en teléfonos antiguos
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(datosModificados)
+      })
+      .then(() => {
+        // Al usar no-cors asumimos éxito y refrescamos de inmediato de forma local
+        const index = rawData.findIndex(m => m.ID === datosModificados.ID);
+        if (index !== -1) {
+          rawData[index].SEMAFORO = datosModificados.SEMAFORO;
+          rawData[index].GESTIONO = datosModificados.GESTIONO;
+          rawData[index].TELEFONO = datosModificados.TELEFONO;
+          rawData[index].MAIL = datosModificados.MAIL;
+          rawData[index].DOMICILIO = datosModificados.DOMICILIO;
+        }
+        render(rawData);
+        cancelarEdicion(); 
+        verFicha(milActual.ID);
+        alert("¡Guardado exitoso!");
+      })
+      .catch(err => alert("Error de escritura: " + err));
+    }
+
+    function cerrarDetalle() { 
+      document.getElementById('vista-detalle').style.display = 'none'; 
+      document.getElementById('vista-lista').style.display = 'block'; 
+      window.scrollTo(0, ultimaPosicionScroll);
+    }
+
+    function filtrar() {
+      const t = document.getElementById('buscador').value.toLowerCase().trim();
+      render(rawData.filter(m => {
+        return (m.NOMBRE || '').toLowerCase().includes(t) || 
+               (m.COMUNA || '').toLowerCase().includes(t) || 
+               (m.ID || '').toLowerCase().includes(t);
+      }));
+    }
+  </script>
+</body>
+</html>
