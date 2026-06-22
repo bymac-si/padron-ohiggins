@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Padrón O'Higgins (AppSheet)</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <style>
     :root { --primary: #041e31; --bg: #f0f2f5; }
     body { background-color: var(--bg); font-family: 'Segoe UI', sans-serif; min-height: 100vh; -webkit-overflow-scrolling: touch; }
@@ -23,6 +23,15 @@
     .info-label { font-size: 0.75rem; color: #70757a; text-transform: uppercase; font-weight: bold; }
     .info-value { font-size: 1rem; color: #202124; margin-bottom: 12px; border-bottom: 1px solid #eee; }
     #formulario-edicion { display: none; }
+    
+    /* Estilo para los selectores de tipo botón/check */
+    .check-semaforo { padding: 10px; border-radius: 8px; border: 2px solid #ddd; display: block; text-align: center; cursor: pointer; font-weight: bold; margin-bottom: 8px; transition: 0.2s; }
+    .check-semaforo input { display: none; }
+    
+    input:checked + .lbl-seguro { background-color: #d1e7dd; border-color: #198754; color: #0f5132; }
+    input:checked + .lbl-indeciso { background-color: #fff3cd; border-color: #ffc107; color: #664d03; }
+    input:checked + .lbl-oposicion { background-color: #f8d7da; border-color: #dc3545; color: #842029; }
+    input:checked + .lbl-novota { background-color: #e2e3e5; border-color: #6c757d; color: #41464b; }
   </style>
 </head>
 <body>
@@ -63,16 +72,40 @@
 
       <div id="formulario-edicion" class="bg-light p-3 rounded-3 mb-4">
         <h5>Editar Registro</h5>
-        <div class="mb-3">
-          <label class="form-label fw-bold">Semáforo Político</label>
-          <select id="edit-semaforo" class="form-select">
-            <option value="">Sin Clasificar</option>
-            <option value="SEGURO">SEGURO</option>
-            <option value="INDECISO">INDECISO</option>
-            <option value="OPOSICION">OPOSICIÓN</option>
-            <option value="NO VOTA">NO VOTA</option>
-          </select>
+        
+        <div class="mb-4">
+          <label class="form-label fw-bold d-block mb-2">Semáforo Político (Selecciona uno)</label>
+          <div class="row gx-2">
+            <div class="col-6">
+              <label class="check-container">
+                <input type="radio" name="semaforo_radio" id="check-seguro" value="SEGURO">
+                <div class="check-semaforo lbl-seguro">SEGURO</div>
+              </label>
+            </div>
+            <div class="col-6">
+              <label class="check-container">
+                <input type="radio" name="semaforo_radio" id="check-indeciso" value="INDECISO">
+                <div class="check-semaforo lbl-indeciso">INDECISO</div>
+              </label>
+            </div>
+            <div class="col-6">
+              <label class="check-container">
+                <input type="radio" name="semaforo_radio" id="check-oposicion" value="OPOSICION">
+                <div class="check-semaforo lbl-oposicion">OPOSICIÓN</div>
+              </label>
+            </div>
+            <div class="col-6">
+              <label class="check-container">
+                <input type="radio" name="semaforo_radio" id="check-novota" value="NO VOTA">
+                <div class="check-semaforo lbl-novota">NO VOTA</div>
+              </label>
+            </div>
+          </div>
+          <div class="text-center mt-1">
+            <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="desmarcarSemaforos()">Limpiar Semáforo</button>
+          </div>
         </div>
+
         <div class="mb-3">
           <label class="form-label fw-bold">Gestionó</label>
           <select id="edit-gestiono" class="form-select">
@@ -112,10 +145,9 @@
   </div>
 
   <script>
-    // CONFIGURACIÓN DE CREDENCIALES NATIVAS DE APPSHEET
     const APP_ID = "b0f9ef06-d637-421d-aa05-9e90468be441";
     const APP_KEY = "V2-d6Gtp-eRRqO-vFXXf-Nh1Hv-I896z-i3lw4-Ep5CM-U3RCZ";
-    const TABLA_NAME = "Militantes"; // Nombre exacto de la tabla en tu AppSheet
+    const TABLA_NAME = "Militantes";
 
     let rawData = [];
     let milActual = null;
@@ -125,38 +157,30 @@
       cargarDatosDesdeAppSheet();
     };
 
-    // FUNCIÓN DE LECTURA DIRECTA DE LA API
     function cargarDatosDesdeAppSheet() {
       fetch(`https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/${TABLA_NAME}/Action`, {
         method: "POST",
-        headers: {
-          "applicationAccessKey": APP_KEY,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          "Action": "Find",
-          "Properties": { "Locale": "es-CL" },
-          "Rows": []
-        })
+        headers: { "applicationAccessKey": APP_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ "Action": "Find", "Properties": { "Locale": "es-CL" }, "Rows": [] })
       })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
           rawData = data.map(m => {
-            // Homologamos la lógica del semáforo para el pintado de tarjetas CSS
-            if (m.SEGURO && m.SEGURO.toUpperCase() === 'X') m.SEMAFORO = 'SEGURO';
-            else if (m.INDECISO && m.INDECISO.toUpperCase() === 'X') m.SEMAFORO = 'INDECISO';
-            else if (m.OPOSICION && m.OPOSICION.toUpperCase() === 'X') m.SEMAFORO = 'OPOSICION';
-            else if (m.INDECISO === 'NO VOTA' || (m['NO VOTA'] && m['NO VOTA'].toUpperCase() === 'X')) m.SEMAFORO = 'NO VOTA';
-            else m.SEMAFORO = m.SEMAFORO || '';
+            // Mapeamos el campo virtual 'SEMAFORO' basado en qué columna individual tiene la "X"
+            if (m.SEGURO && m.SEGURO.toUpperCase().trim() === 'X') m.SEMAFORO = 'SEGURO';
+            else if (m.INDECISO && m.INDECISO.toUpperCase().trim() === 'X') m.SEMAFORO = 'INDECISO';
+            else if (m.OPOSICION && m.OPOSICION.toUpperCase().trim() === 'X') m.SEMAFORO = 'OPOSICION';
+            else if (m['NO VOTA'] && m['NO VOTA'].toUpperCase().trim() === 'X') m.SEMAFORO = 'NO VOTA';
+            else m.SEMAFORO = '';
             return m;
           });
           render(rawData);
         } else {
-          alert("Error en la estructura de respuesta de AppSheet.");
+          alert("Error en la estructura de datos.");
         }
       })
-      .catch(err => alert("Error al conectar con AppSheet: " + err));
+      .catch(err => alert("Error al conectar: " + err));
     }
 
     function obtenerClaseSemaforo(estado) {
@@ -212,7 +236,6 @@
         <div class="col-6"><div class="info-label">Sexo / Edad</div><div class="info-value">${milActual.SEXO || ''} (${milActual.EDAD || ''} años)</div></div>
         <div class="col-12"><div class="info-label">Domicilio</div><div class="info-value">${milActual.DOMICILIO || ''}</div></div>
         <div class="col-6"><div class="info-label">F. Militancia</div><div class="info-value">${milActual['F MILITANCIA'] || ''}</div></div>
-        <div class="col-6"><div class="info-label">Tiempo Militancia</div><div class="info-value">${milActual['TIEMPO MILITANCIA'] || ''}</div></div>
         <div class="col-6"><div class="info-label">Teléfono</div><div class="info-value">${milActual.TELEFONO || ''}</div></div>
         <div class="col-6"><div class="info-label">Mail</div><div class="info-value">${milActual.MAIL || ''}</div></div>
         <div class="col-6"><div class="info-label">Gestionó</div><div class="info-value fw-bold text-primary">${milActual.GESTIONO || 'SIN ASIGNAR'}</div></div>
@@ -225,7 +248,13 @@
     }
 
     function habilitarEdicion() {
-      document.getElementById('edit-semaforo').value = milActual.SEMAFORO || '';
+      // Marcamos el botón correcto de acuerdo a la "X" actual
+      desmarcarSemaforos();
+      if (milActual.SEMAFORO === 'SEGURO') document.getElementById('check-seguro').checked = true;
+      if (milActual.SEMAFORO === 'INDECISO') document.getElementById('check-indeciso').checked = true;
+      if (milActual.SEMAFORO === 'OPOSICION') document.getElementById('check-oposicion').checked = true;
+      if (milActual.SEMAFORO === 'NO VOTA') document.getElementById('check-novota').checked = true;
+
       document.getElementById('edit-gestiono').value = milActual.GESTIONO || '';
       document.getElementById('edit-telefono').value = milActual.TELEFONO || '';
       document.getElementById('edit-mail-input').value = milActual.MAIL || '';
@@ -234,54 +263,51 @@
       document.getElementById('formulario-edicion').style.display = 'block';
     }
 
+    function desmarcarSemaforos() {
+      const radios = document.getElementsByName('semaforo_radio');
+      radios.forEach(r => r.checked = false);
+    }
+
     function cancelarEdicion() {
       document.getElementById('bloque-visualizacion').style.display = 'block';
       document.getElementById('formulario-edicion').style.display = 'none';
     }
 
-    // FUNCIÓN DE ESCRITURA DIRECTA EN APPSHEET EN TIEMPO REAL
     function guardarCambiosAppSheet() {
-      const semaforoSeleccionado = document.getElementById('edit-semaforo').value;
+      // Buscamos cuál botón radial fue seleccionado
+      const elementoSeleccionado = document.querySelector('input[name="semaforo_radio"]:checked');
+      const valorSemaforo = elementoSeleccionado ? elementoSeleccionado.value : "";
       
-      // Creamos la fila de actualización estructurada como lo requiere la base de datos
+      // Armamos el objeto enviando "X" solo al campo correspondiente
       let filaUpdate = {
         "ID": milActual.ID,
         "DOMICILIO": document.getElementById('edit-domicilio').value,
         "TELEFONO": document.getElementById('edit-telefono').value,
         "MAIL": document.getElementById('edit-mail-input').value,
         "GESTIONO": document.getElementById('edit-gestiono').value,
-        // Limpiamos los flags de las X
-        "SEGURO": semaforoSeleccionado === "SEGURO" ? "X" : "",
-        "INDECISO": semaforoSeleccionado === "INDECISO" ? "X" : "",
-        "OPOSICION": semaforoSeleccionado === "OPOSICION" ? "X" : "",
-        "NO VOTA": semaforoSeleccionado === "NO VOTA" ? "X" : ""
+        "SEGURO": valorSemaforo === "SEGURO" ? "X" : "",
+        "INDECISO": valorSemaforo === "INDECISO" ? "X" : "",
+        "OPOSICION": valorSemaforo === "OPOSICION" ? "X" : "",
+        "NO VOTA": valorSemaforo === "NO VOTA" ? "X" : ""
       };
 
       const contenedorForm = document.getElementById('formulario-edicion');
-      contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Sincronizando directo con la nube de AppSheet...</p></div>';
+      contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Sincronizando con base de datos...</p></div>';
 
       fetch(`https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/${TABLA_NAME}/Action`, {
         method: "POST",
-        headers: {
-          "applicationAccessKey": APP_KEY,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          "Action": "Edit",
-          "Properties": { "Locale": "es-CL" },
-          "Rows": [ filaUpdate ]
-        })
+        headers: { "applicationAccessKey": APP_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ "Action": "Edit", "Properties": { "Locale": "es-CL" }, "Rows": [ filaUpdate ] })
       })
       .then(res => res.json())
       .then(respuestaAPI => {
-        // Al guardar con éxito, actualizamos localmente el estado de la app en memoria
         const index = rawData.findIndex(m => m.ID.toString().trim() === milActual.ID.toString().trim());
         if (index !== -1) {
           rawData[index].DOMICILIO = filaUpdate.DOMICILIO;
           rawData[index].TELEFONO = filaUpdate.TELEFONO;
           rawData[index].MAIL = filaUpdate.MAIL;
           rawData[index].GESTIONO = filaUpdate.GESTIONO;
-          rawData[index].SEMAFORO = semaforoSeleccionado;
+          rawData[index].SEMAFORO = valorSemaforo;
           rawData[index].SEGURO = filaUpdate.SEGURO;
           rawData[index].INDECISO = filaUpdate.INDECISO;
           rawData[index].OPOSICION = filaUpdate.OPOSICION;
@@ -291,11 +317,11 @@
         render(rawData);
         cancelarEdicion();
         verFicha(milActual.ID);
-        alert("¡Guardado en AppSheet de forma instantánea!");
+        alert("¡Guardado e inyectado correctamente!");
       })
       .catch(err => {
         alert("Fallo al guardar: " + err);
-        location.reload(); // Recarga en caso de fallo técnico para no perder consistencia
+        location.reload();
       });
     }
 
