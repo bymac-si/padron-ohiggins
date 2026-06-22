@@ -33,9 +33,9 @@
       <h4>Padrón O'Higgins</h4>
     </div>
     <div class="container mt-3">
-      <input type="text" id="buscador" class="form-control mb-3" placeholder="🔍 Buscar por Nombre, Comuna, ID..." onkeyup="filtrar()">
+      <input type="text" id="buscador" class="form-control mb-3" placeholder="🔍 Buscar por Nombre, Comuna, ID o Gestión..." onkeyup="filtrar()">
       <div id="lista" class="row">
-        <div class="text-center mt-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Descargando padrón desde la nube...</p></div>
+        <div class="text-center mt-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Cargando padrón optimizado...</p></div>
       </div>
     </div>
   </div>
@@ -108,30 +108,58 @@
           <button class="btn btn-secondary" onclick="cancelarEdicion()">Cancelar</button>
         </div>
       </div>
+
+      <h5>Bitácora de Interacciones</h5>
+      <div id="historial"></div>
+      <button class="btn btn-primary w-100 mt-4 mb-5 py-3" onclick="agregarNota()">+ Nueva Gestión</button>
     </div>
   </div>
 
   <script>
-    // REEMPLAZA ESTA URL POR LA DE TU APLICACIÓN WEB DE GOOGLE APPS SCRIPT
-    const API_URL = "CONECTA_AQUÍ_LA_URL_DE_TU_APLICACION_WEB";
+    // URL modificada a formato CSV para descarga ultra rápida en móviles
+    const URL_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQE8o4sH5QoV2m8zHjA93YOGUPbjGcrTt_awGBZ68V5bocVZhaVf18_g0COZRJ55Q/pub?gid=1414541389&single=true&output=csv";
 
     let rawData = [];
     let milActual = null;
     let ultimaPosicionScroll = 0;
 
     window.onload = () => {
-      cargarDatosDesdeServidor();
+      cargarPadrónDesdeCSV();
     };
 
-    function cargarDatosDesdeServidor() {
-      fetch(`${API_URL}?action=read`)
-        .then(response => response.json())
-        .then(data => {
-          if (data.error) { alert("Error de origen: " + data.error); return; }
-          rawData = data;
-          render(data);
+    function cargarPadrónDesdeCSV() {
+      fetch(URL_CSV)
+        .then(res => res.text())
+        .then(csvText => {
+          rawData = parsearCSV(csvText);
+          render(rawData);
         })
-        .catch(err => alert("Error de conexión al servidor: " + err));
+        .catch(err => alert("Error al cargar datos públicos: " + err));
+    }
+
+    // Parseador veloz nativo para no congelar navegadores antiguos
+    function parsearCSV(texto) {
+      let lineas = texto.split(/\r?\n/);
+      let headers = lineas.shift().split(",").map(h => h.replace(/"/g, '').trim());
+      
+      return lineas.filter(l => l.trim() !== "").map(linea => {
+        // Expresión regular avanzada para respetar comas dentro de textos entrecomillados (como domicilios)
+        let matches = linea.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || linea.split(",");
+        let obj = {};
+        headers.forEach((h, i) => {
+          let val = matches[i] ? matches[i].replace(/"/g, '').trim() : "";
+          obj[h] = val;
+        });
+
+        // Lógica del semáforo político basada en tus columnas limpias
+        if (obj.SEGURO && obj.SEGURO.toUpperCase() === 'X') obj.SEMAFORO = 'SEGURO';
+        else if (obj.INDECISO && obj.INDECISO.toUpperCase() === 'X') obj.SEMAFORO = 'INDECISO';
+        else if (obj.OPOSICION && obj.OPOSICION.toUpperCase() === 'X') obj.SEMAFORO = 'OPOSICION';
+        else if (obj['NO VOTA'] && obj['NO VOTA'].toUpperCase() === 'X') obj.SEMAFORO = 'NO VOTA';
+        else obj.SEMAFORO = '';
+
+        return obj;
+      });
     }
 
     function obtenerClaseSemaforo(estado) {
@@ -139,18 +167,13 @@
       const est = estado.toUpperCase().trim();
       if (est === 'SEGURO') return 'semaforo-seguro';
       if (est === 'INDECISO') return 'semaforo-indeciso';
-      if (est === 'OPOSICION' || est === 'OPOSICIÓN') return 'semaforo-oposicion';
+      if (est === 'OPOSICION') return 'semaforo-oposicion';
       if (est === 'NO VOTA') return 'semaforo-novota';
       return '';
     }
 
     function render(data) {
       const lista = document.getElementById('lista');
-      if (!data || data.length === 0) {
-        lista.innerHTML = '<div class="text-center mt-5"><p class="text-muted">No se encontraron registros.</p></div>';
-        return;
-      }
-
       lista.innerHTML = data.map(m => {
         const claseColor = obtenerClaseSemaforo(m.SEMAFORO);
         return `
@@ -174,12 +197,10 @@
       if (!milActual) return;
       
       cancelarEdicion();
-
       const cabecera = document.getElementById('cabecera-ficha');
       cabecera.className = "p-3 rounded-3 text-center mb-4 " + obtenerClaseSemaforo(milActual.SEMAFORO);
       
       document.getElementById('nombre-ficha').innerHTML = `<h3 class="mb-0">${milActual.NOMBRE || ''}</h3><p class="mb-0 opacity-75">N°: ${milActual.N || ''} | RUT: ${milActual.ID || ''}</p>`;
-      
       document.getElementById('lnk-wa').href = "https://wa.me/" + (milActual.TELEFONO || '');
       document.getElementById('lnk-mail').href = "mailto:" + (milActual.MAIL || '');
 
@@ -200,6 +221,7 @@
       document.getElementById('vista-lista').style.display = 'none';
       document.getElementById('vista-detalle').style.display = 'block';
       window.scrollTo(0, 0);
+      cargarLogs(id);
     }
 
     function habilitarEdicion() {
@@ -208,7 +230,6 @@
       document.getElementById('edit-telefono').value = milActual.TELEFONO || '';
       document.getElementById('edit-mail-input').value = milActual.MAIL || '';
       document.getElementById('edit-domicilio').value = milActual.DOMICILIO || '';
-
       document.getElementById('bloque-visualizacion').style.display = 'none';
       document.getElementById('formulario-edicion').style.display = 'block';
     }
@@ -229,16 +250,10 @@
       };
 
       const contenedorForm = document.getElementById('formulario-edicion');
-      contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Inyectando cambios en base central...</p></div>';
+      contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Guardando en planilla central...</p></div>';
 
-      fetch(API_URL, {
-        method: "POST",
-        mode: "no-cors", // Evita problemas de políticas CORS en teléfonos antiguos
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(datosModificados)
-      })
-      .then(() => {
-        // Al usar no-cors asumimos éxito y refrescamos de inmediato de forma local
+      // Llamamos a Apps Script SOLO para guardar el cambio de forma asíncrona
+      google.script.run.withSuccessHandler(() => {
         const index = rawData.findIndex(m => m.ID === datosModificados.ID);
         if (index !== -1) {
           rawData[index].SEMAFORO = datosModificados.SEMAFORO;
@@ -250,9 +265,23 @@
         render(rawData);
         cancelarEdicion(); 
         verFicha(milActual.ID);
-        alert("¡Guardado exitoso!");
-      })
-      .catch(err => alert("Error de escritura: " + err));
+        alert("¡Registro guardado!");
+      }).actualizarMilitante(datosModificados); 
+    }
+
+    function cargarLogs(id) {
+      const h = document.getElementById('historial');
+      h.innerHTML = '<small>Cargando...</small>';
+      google.script.run.withSuccessHandler(logs => {
+        h.innerHTML = logs && logs.length ? logs.map(l => `
+          <div class="timeline-item"><small class="fw-bold">${l.fecha}</small><br>
+          <div class="bg-white p-2 rounded border mt-1 shadow-sm">${l.observacion}</div></div>`).join('') : '<p class="text-muted small">Sin registros.</p>';
+      }).obtenerInteracciones(id);
+    }
+
+    function agregarNota() {
+      const n = prompt("Gestión realizada:");
+      if(n) google.script.run.withSuccessHandler(() => cargarLogs(milActual.ID)).registrarBitacora(milActual.ID, n);
     }
 
     function cerrarDetalle() { 
@@ -263,11 +292,12 @@
 
     function filtrar() {
       const t = document.getElementById('buscador').value.toLowerCase().trim();
-      render(rawData.filter(m => {
-        return (m.NOMBRE || '').toLowerCase().includes(t) || 
-               (m.COMUNA || '').toLowerCase().includes(t) || 
-               (m.ID || '').toLowerCase().includes(t);
-      }));
+      render(rawData.filter(m => 
+        (m.NOMBRE || '').toLowerCase().includes(t) || 
+        (m.COMUNA || '').toLowerCase().includes(t) || 
+        (m.ID || '').toLowerCase().includes(t) ||
+        (m.GESTIONO || '').toLowerCase().includes(t)
+      ));
     }
   </script>
 </body>
