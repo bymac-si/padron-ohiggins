@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Padrón O'Higgins</title>
+  <title>Padrón O'Higgins (AppSheet)</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <style>
@@ -35,7 +35,7 @@
     <div class="container mt-3">
       <input type="text" id="buscador" class="form-control mb-3" placeholder="🔍 Buscar por Nombre, Comuna, ID o Gestión..." onkeyup="filtrar()">
       <div id="lista" class="row">
-        <div class="text-center mt-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Cargando padrón optimizado...</p></div>
+        <div class="text-center mt-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Conectando a base de datos AppSheet...</p></div>
       </div>
     </div>
   </div>
@@ -104,79 +104,62 @@
           <input type="text" id="edit-domicilio" class="form-control">
         </div>
         <div class="d-flex gap-2">
-          <button class="btn btn-success flex-grow-1" onclick="guardarCambios()">Guardar</button>
+          <button class="btn btn-success flex-grow-1" onclick="guardarCambiosAppSheet()">Guardar</button>
           <button class="btn btn-secondary" onclick="cancelarEdicion()">Cancelar</button>
         </div>
       </div>
-
-      <h5>Bitácora de Interacciones</h5>
-      <div id="historial"></div>
-      <button class="btn btn-primary w-100 mt-4 mb-5 py-3" onclick="agregarNota()">+ Nueva Gestión</button>
     </div>
   </div>
 
   <script>
-    const URL_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQE8o4sH5QoV2m8zHjA93YOGUPbjGcrTt_awGBZ68V5bocVZhaVf18_g0COZRJ55Q/pub?gid=1414541389&single=true&output=csv";
+    // CONFIGURACIÓN DE CREDENCIALES NATIVAS DE APPSHEET
+    const APP_ID = "b0f9ef06-d637-421d-aa05-9e90468be441";
+    const APP_KEY = "V2-d6Gtp-eRRqO-vFXXf-Nh1Hv-I896z-i3lw4-Ep5CM-U3RCZ";
+    const TABLA_NAME = "Militantes"; // Nombre exacto de la tabla en tu AppSheet
 
     let rawData = [];
     let milActual = null;
     let ultimaPosicionScroll = 0;
 
     window.onload = () => {
-      cargarPadrónDesdeCSV();
+      cargarDatosDesdeAppSheet();
     };
 
-    function cargarPadrónDesdeCSV() {
-      fetch(URL_CSV)
-        .then(res => res.text())
-        .then(csvText => {
-          rawData = parsearCSV(csvText);
-          render(rawData);
+    // FUNCIÓN DE LECTURA DIRECTA DE LA API
+    function cargarDatosDesdeAppSheet() {
+      fetch(`https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/${TABLA_NAME}/Action`, {
+        method: "POST",
+        headers: {
+          "applicationAccessKey": APP_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "Action": "Find",
+          "Properties": { "Locale": "es-CL" },
+          "Rows": []
         })
-        .catch(err => alert("Error al cargar datos públicos: " + err));
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          rawData = data.map(m => {
+            // Homologamos la lógica del semáforo para el pintado de tarjetas CSS
+            if (m.SEGURO && m.SEGURO.toUpperCase() === 'X') m.SEMAFORO = 'SEGURO';
+            else if (m.INDECISO && m.INDECISO.toUpperCase() === 'X') m.SEMAFORO = 'INDECISO';
+            else if (m.OPOSICION && m.OPOSICION.toUpperCase() === 'X') m.SEMAFORO = 'OPOSICION';
+            else if (m.INDECISO === 'NO VOTA' || (m['NO VOTA'] && m['NO VOTA'].toUpperCase() === 'X')) m.SEMAFORO = 'NO VOTA';
+            else m.SEMAFORO = m.SEMAFORO || '';
+            return m;
+          });
+          render(rawData);
+        } else {
+          alert("Error en la estructura de respuesta de AppSheet.");
+        }
+      })
+      .catch(err => alert("Error al conectar con AppSheet: " + err));
     }
 
-    // PARSEADOR REPARADO: Soporta nombres completos, comas internas y textos largos sin recortar
-function parsearCSV(texto) {
-  let lineas = texto.split(/\r?\n/);
-  if (lineas.length === 0) return [];
-  
-  // Limpiamos las cabeceras eliminando comillas y espacios externos
-  let headers = lineas.shift().split(",").map(h => h.replace(/["']/g, '').trim());
-  let resultado = [];
-
-  for (let i = 0; i < lineas.length; i++) {
-    let linea = lineas[i].trim();
-    if (linea === "") continue;
-
-    // Expresión regular que separa por comas pero IGNORA las comas que estén dentro de textos entrecomillados
-    let columnas = [];
-    let regex = /("([^"]*)"|([^,]+))/g;
-    let match;
-    
-    while ((match = regex.exec(linea)) !== null) {
-      // Si el texto venía entrecomillado usamos el grupo 2, si no, el grupo 3
-      let valorCelda = match[2] !== undefined ? match[2] : match[3];
-      columnas.push(valorCelda ? valorCelda.trim() : "");
-    }
-
-    let obj = {};
-    headers.forEach((h, idx) => {
-      // Blindaje: si la columna no existe en esta fila, se deja vacía en lugar de 'undefined'
-      obj[h] = columnas[idx] !== undefined ? columnas[idx] : "";
-    });
-
-    // Verificación y consistencia del semáforo político
-    if (obj.SEGURO && obj.SEGURO.toUpperCase() === 'X') obj.SEMAFORO = 'SEGURO';
-    else if (obj.INDECISO && obj.INDECISO.toUpperCase() === 'X') obj.SEMAFORO = 'INDECISO';
-    else if (obj.OPOSICION && obj.OPOSICION.toUpperCase() === 'X') obj.SEMAFORO = 'OPOSICION';
-    else if (obj['NO VOTA'] && obj['NO VOTA'].toUpperCase() === 'X') obj.SEMAFORO = 'NO VOTA';
-    else obj.SEMAFORO = '';
-
-    resultado.push(obj);
-  }
-  return resultado;
-}    function obtenerClaseSemaforo(estado) {
+    function obtenerClaseSemaforo(estado) {
       if (!estado) return '';
       const est = estado.toUpperCase().trim();
       if (est === 'SEGURO') return 'semaforo-seguro';
@@ -188,6 +171,10 @@ function parsearCSV(texto) {
 
     function render(data) {
       const lista = document.getElementById('lista');
+      if (data.length === 0) {
+        lista.innerHTML = '<div class="text-center mt-5 text-muted"><p>No se encontraron registros.</p></div>';
+        return;
+      }
       lista.innerHTML = data.map(m => {
         const claseColor = obtenerClaseSemaforo(m.SEMAFORO);
         return `
@@ -207,7 +194,7 @@ function parsearCSV(texto) {
 
     function verFicha(id) {
       ultimaPosicionScroll = window.scrollY;
-      milActual = rawData.find(m => m.ID === id);
+      milActual = rawData.find(m => m.ID.toString().trim() === id.toString().trim());
       if (!milActual) return;
       
       cancelarEdicion();
@@ -235,7 +222,6 @@ function parsearCSV(texto) {
       document.getElementById('vista-lista').style.display = 'none';
       document.getElementById('vista-detalle').style.display = 'block';
       window.scrollTo(0, 0);
-      cargarLogs(id);
     }
 
     function habilitarEdicion() {
@@ -253,60 +239,64 @@ function parsearCSV(texto) {
       document.getElementById('formulario-edicion').style.display = 'none';
     }
 
-    function guardarCambios() {
-  const datosModificados = {
-    ID: milActual.ID,
-    SEMAFORO: document.getElementById('edit-semaforo').value,
-    GESTIONO: document.getElementById('edit-gestiono').value,
-    TELEFONO: document.getElementById('edit-telefono').value,
-    MAIL: document.getElementById('edit-mail-input').value,
-    DOMICILIO: document.getElementById('edit-domicilio').value
-  };
+    // FUNCIÓN DE ESCRITURA DIRECTA EN APPSHEET EN TIEMPO REAL
+    function guardarCambiosAppSheet() {
+      const semaforoSeleccionado = document.getElementById('edit-semaforo').value;
+      
+      // Creamos la fila de actualización estructurada como lo requiere la base de datos
+      let filaUpdate = {
+        "ID": milActual.ID,
+        "DOMICILIO": document.getElementById('edit-domicilio').value,
+        "TELEFONO": document.getElementById('edit-telefono').value,
+        "MAIL": document.getElementById('edit-mail-input').value,
+        "GESTIONO": document.getElementById('edit-gestiono').value,
+        // Limpiamos los flags de las X
+        "SEGURO": semaforoSeleccionado === "SEGURO" ? "X" : "",
+        "INDECISO": semaforoSeleccionado === "INDECISO" ? "X" : "",
+        "OPOSICION": semaforoSeleccionado === "OPOSICION" ? "X" : "",
+        "NO VOTA": semaforoSeleccionado === "NO VOTA" ? "X" : ""
+      };
 
-  const contenedorForm = document.getElementById('formulario-edicion');
-  contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Guardando en planilla central...</p></div>';
+      const contenedorForm = document.getElementById('formulario-edicion');
+      contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Sincronizando directo con la nube de AppSheet...</p></div>';
 
-  // Ejecutamos con manejador de éxito y de error explícitos
-  google.script.run
-    .withSuccessHandler((resultado) => {
-      if (resultado === true) {
-        // Si el script retornó true, actualizamos la vista local
-        const index = rawData.findIndex(m => m.ID === datosModificados.ID);
+      fetch(`https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/${TABLA_NAME}/Action`, {
+        method: "POST",
+        headers: {
+          "applicationAccessKey": APP_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "Action": "Edit",
+          "Properties": { "Locale": "es-CL" },
+          "Rows": [ filaUpdate ]
+        })
+      })
+      .then(res => res.json())
+      .then(respuestaAPI => {
+        // Al guardar con éxito, actualizamos localmente el estado de la app en memoria
+        const index = rawData.findIndex(m => m.ID.toString().trim() === milActual.ID.toString().trim());
         if (index !== -1) {
-          rawData[index].SEMAFORO = datosModificados.SEMAFORO;
-          rawData[index].GESTIONO = datosModificados.GESTIONO;
-          rawData[index].TELEFONO = datosModificados.TELEFONO;
-          rawData[index].MAIL = datosModificados.MAIL;
-          rawData[index].DOMICILIO = datosModificados.DOMICILIO;
+          rawData[index].DOMICILIO = filaUpdate.DOMICILIO;
+          rawData[index].TELEFONO = filaUpdate.TELEFONO;
+          rawData[index].MAIL = filaUpdate.MAIL;
+          rawData[index].GESTIONO = filaUpdate.GESTIONO;
+          rawData[index].SEMAFORO = semaforoSeleccionado;
+          rawData[index].SEGURO = filaUpdate.SEGURO;
+          rawData[index].INDECISO = filaUpdate.INDECISO;
+          rawData[index].OPOSICION = filaUpdate.OPOSICION;
+          rawData[index]['NO VOTA'] = filaUpdate['NO VOTA'];
         }
+        
         render(rawData);
-        cancelarEdicion(); 
-        verFicha(milActual.ID);
-        alert("¡Registro guardado con éxito!");
-      } else {
-        // Si retornó un texto, es porque no encontró el RUT
-        alert("Error del servidor: " + resultado);
         cancelarEdicion();
-      }
-    })
-    .withFailureHandler((error) => {
-      alert("Error crítico de comunicación: " + error.message);
-      cancelarEdicion();
-    })
-    .actualizarMilitante(datosModificados); 
-}    function cargarLogs(id) {
-      const h = document.getElementById('historial');
-      h.innerHTML = '<small>Cargando...</small>';
-      google.script.run.withSuccessHandler(logs => {
-        h.innerHTML = logs && logs.length ? logs.map(l => `
-          <div class="timeline-item"><small class="fw-bold">${l.fecha}</small><br>
-          <div class="bg-white p-2 rounded border mt-1 shadow-sm">${l.observacion}</div></div>`).join('') : '<p class="text-muted small">Sin registros.</p>';
-      }).obtenerInteracciones(id);
-    }
-
-    function agregarNota() {
-      const n = prompt("Gestión realizada:");
-      if(n) google.script.run.withSuccessHandler(() => cargarLogs(milActual.ID)).registrarBitacora(milActual.ID, n);
+        verFicha(milActual.ID);
+        alert("¡Guardado en AppSheet de forma instantánea!");
+      })
+      .catch(err => {
+        alert("Fallo al guardar: " + err);
+        location.reload(); // Recarga en caso de fallo técnico para no perder consistencia
+      });
     }
 
     function cerrarDetalle() { 
@@ -320,7 +310,7 @@ function parsearCSV(texto) {
       render(rawData.filter(m => 
         (m.NOMBRE || '').toLowerCase().includes(t) || 
         (m.COMUNA || '').toLowerCase().includes(t) || 
-        (m.ID || '').toLowerCase().includes(t) ||
+        (m.ID || '').toString().toLowerCase().includes(t) ||
         (m.GESTIONO || '').toLowerCase().includes(t)
       ));
     }
