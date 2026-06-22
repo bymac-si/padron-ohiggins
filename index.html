@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Padrón O'Higgins (AppSheet)</title>
+  <title>Padrón O'Higgins (Militantes_base)</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <style>
@@ -43,7 +43,7 @@
     <div class="container mt-3">
       <input type="text" id="buscador" class="form-control mb-3" placeholder="🔍 Buscar por Nombre, Comuna, ID o Gestión..." onkeyup="filtrar()">
       <div id="lista" class="row">
-        <div class="text-center mt-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Conectando a base de datos AppSheet...</p></div>
+        <div class="text-center mt-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Conectando a Militantes_base en AppSheet...</p></div>
       </div>
     </div>
   </div>
@@ -144,37 +144,20 @@
   </div>
 
   <script>
-    const APP_ID = "b0f9ef06-d637-421d-aa05-9e90468be441";
-    const APP_KEY = "V2-d6Gtp-eRRqO-vFXXf-Nh1Hv-I896z-i3lw4-Ep5CM-U3RCZ";
-    const TABLA_NAME = "Militantes_Base";
+    // PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT
+    const URL_CONECTOR = "https://script.google.com/macros/s/AKfycbyrOLZRQmMpx844EEAXrG4B8JTW9BMaM4tgt53rtTelg1_LV6aPbe4kFJvFRpgPLXgSyQ/exec";
 
     let rawData = [];
     let milActual = null;
     let ultimaPosicionScroll = 0;
 
     window.onload = () => {
-      cargarDatosDesdeAppSheet();
+      cargarDatosDesdePuente();
     };
 
-    function cargarDatosDesdeAppSheet() {
-      const url = "https://api.appsheet.com/api/v2/apps/" + APP_ID + "/tables/" + TABLA_NAME + "/Action";
-      
-      fetch(url, {
-        method: "POST",
-        headers: {
-          "applicationAccessKey": APP_KEY,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          "Action": "Find",
-          "Properties": { "Locale": "es-CL" },
-          "Rows": []
-        })
-      })
-      .then(res => {
-        if (!res.ok) throw new Error("HTTP error " + res.status);
-        return res.json();
-      })
+    function cargarDatosDesdePuente() {
+      fetch(URL_CONECTOR)
+      .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
           rawData = data.map(m => {
@@ -187,12 +170,11 @@
           });
           render(rawData);
         } else {
-          alert("Error: La respuesta de la API no es un listado válido.");
+          alert("Error: El conector no devolvió una lista válida.");
         }
       })
       .catch(err => {
-        console.error(err);
-        alert("Error al conectar: " + err.message);
+        alert("Error de comunicación con el puente: " + err.message);
       });
     }
 
@@ -242,13 +224,15 @@
       document.getElementById('lnk-wa').href = "https://wa.me/" + (milActual.TELEFONO || '');
       document.getElementById('lnk-mail').href = "mailto:" + (milActual.MAIL || '');
 
+      // Mapeo adaptado con puntos exactos de las columnas: DIST., F. MILITANCIA, F. NACIMIENTO
       document.getElementById('datos-ficha').innerHTML = `
-        <div class="col-6"><div class="info-label">Región / Dist.</div><div class="info-value">${milActual.REGION || ''} - D${milActual.DIST || ''}</div></div>
+        <div class="col-6"><div class="info-label">Región / Dist.</div><div class="info-value">${milActual.REGION || ''} - D${milActual['DIST.'] || milActual.DIST || ''}</div></div>
         <div class="col-6"><div class="info-label">Comuna</div><div class="info-value">${milActual.COMUNA || ''}</div></div>
         <div class="col-6"><div class="info-label">Cédula / DV</div><div class="info-value">${milActual.CEDULA || ''}-${milActual.DV || ''}</div></div>
         <div class="col-6"><div class="info-label">Sexo / Edad</div><div class="info-value">${milActual.SEXO || ''} (${milActual.EDAD || ''} años)</div></div>
         <div class="col-12"><div class="info-label">Domicilio</div><div class="info-value">${milActual.DOMICILIO || ''}</div></div>
-        <div class="col-6"><div class="info-label">F. Militancia</div><div class="info-value">${milActual['F MILITANCIA'] || ''}</div></div>
+        <div class="col-6"><div class="info-label">F. Militancia</div><div class="info-value">${milActual['F. MILITANCIA'] || milActual['F MILITANCIA'] || ''}</div></div>
+        <div class="col-6"><div class="info-label">F. Nacimiento</div><div class="info-value">${milActual['F. NACIMIENTO'] || milActual['F NACIMIENTO'] || ''}</div></div>
         <div class="col-6"><div class="info-label">Teléfono</div><div class="info-value">${milActual.TELEFONO || ''}</div></div>
         <div class="col-6"><div class="info-label">Mail</div><div class="info-value">${milActual.MAIL || ''}</div></div>
         <div class="col-6"><div class="info-label">Gestionó</div><div class="info-value fw-bold text-primary">${milActual.GESTIONO || 'SIN ASIGNAR'}</div></div>
@@ -290,33 +274,23 @@
       const valorSemaforo = elementoSeleccionado ? elementoSeleccionado.value : "";
       
       let filaUpdate = {
-        "ID": milActual.ID,
-        "DOMICILIO": document.getElementById('edit-domicilio').value,
-        "TELEFONO": document.getElementById('edit-telefono').value,
-        "MAIL": document.getElementById('edit-mail-input').value,
-        "GESTIONO": document.getElementById('edit-gestiono').value,
-        "SEGURO": valorSemaforo === "SEGURO" ? "X" : "",
-        "INDECISO": valorSemaforo === "INDECISO" ? "X" : "",
-        "OPOSICION": valorSemaforo === "OPOSICION" ? "X" : "",
-        "NO VOTA": valorSemaforo === "NO VOTA" ? "X" : ""
+        "ID": milActual.ID.toString().trim(),
+        "DOMICILIO": document.getElementById('edit-domicilio').value || null,
+        "TELEFONO": document.getElementById('edit-telefono').value || null,
+        "MAIL": document.getElementById('edit-mail-input').value || null,
+        "GESTIONO": document.getElementById('edit-gestiono').value || null,
+        "SEGURO": valorSemaforo === "SEGURO" ? "X" : null,
+        "INDECISO": valorSemaforo === "INDECISO" ? "X" : null,
+        "OPOSICION": valorSemaforo === "OPOSICION" ? "X" : null,
+        "NO VOTA": valorSemaforo === "NO VOTA" ? "X" : null
       };
 
       const contenedorForm = document.getElementById('formulario-edicion');
-      contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Sincronizando con base de datos...</p></div>';
+      contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Sincronizando cambios con el servidor...</p></div>';
 
-      const url = "https://api.appsheet.com/api/v2/apps/" + APP_ID + "/tables/" + TABLA_NAME + "/Action";
-
-      fetch(url, {
+      fetch(URL_CONECTOR, {
         method: "POST",
-        headers: {
-          "applicationAccessKey": APP_KEY,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          "Action": "Edit",
-          "Properties": { "Locale": "es-CL" },
-          "Rows": [ filaUpdate ]
-        })
+        body: JSON.stringify(filaUpdate)
       })
       .then(res => {
         if (!res.ok) throw new Error("HTTP error " + res.status);
@@ -325,25 +299,26 @@
       .then(respuestaAPI => {
         const index = rawData.findIndex(m => m.ID.toString().trim() === milActual.ID.toString().trim());
         if (index !== -1) {
-          rawData[index].DOMICILIO = filaUpdate.DOMICILIO;
-          rawData[index].TELEFONO = filaUpdate.TELEFONO;
-          rawData[index].MAIL = filaUpdate.MAIL;
-          rawData[index].GESTIONO = filaUpdate.GESTIONO;
+          rawData[index].DOMICILIO = filaUpdate.DOMICILIO || "";
+          rawData[index].TELEFONO = filaUpdate.TELEFONO || "";
+          rawData[index].MAIL = filaUpdate.MAIL || "";
+          rawData[index].GESTIONO = filaUpdate.GESTIONO || "";
           rawData[index].SEMAFORO = valorSemaforo;
-          rawData[index].SEGURO = filaUpdate.SEGURO;
-          rawData[index].INDECISO = filaUpdate.INDECISO;
-          rawData[index].OPOSICION = filaUpdate.OPOSICION;
-          rawData[index]['NO VOTA'] = filaUpdate['NO VOTA'];
+          rawData[index].SEGURO = filaUpdate.SEGURO || "";
+          rawData[index].INDECISO = filaUpdate.INDECISO || "";
+          rawData[index].OPOSICION = filaUpdate.OPOSICION || "";
+          rawData[index]['NO VOTA'] = filaUpdate['NO VOTA'] || "";
         }
         
         render(rawData);
         cancelarEdicion();
         verFicha(milActual.ID);
-        alert("¡Guardado e inyectado correctamente!");
+        alert("¡Guardado exitoso!");
       })
       .catch(err => {
         alert("Fallo al guardar: " + err.message);
-        location.reload();
+        cancelarEdicion();
+        verFicha(milActual.ID);
       });
     }
 
