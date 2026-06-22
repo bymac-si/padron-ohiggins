@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Padrón O'Higgins (AppSheet)</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <style>
     :root { --primary: #041e31; --bg: #f0f2f5; }
     body { background-color: var(--bg); font-family: 'Segoe UI', sans-serif; min-height: 100vh; -webkit-overflow-scrolling: touch; }
@@ -24,9 +24,8 @@
     .info-value { font-size: 1rem; color: #202124; margin-bottom: 12px; border-bottom: 1px solid #eee; }
     #formulario-edicion { display: none; }
     
-    /* Estilo para los selectores de tipo botón/check */
     .check-semaforo { padding: 10px; border-radius: 8px; border: 2px solid #ddd; display: block; text-align: center; cursor: pointer; font-weight: bold; margin-bottom: 8px; transition: 0.2s; }
-    .check-semaforo input { display: none; }
+    .check-container input { display: none; }
     
     input:checked + .lbl-seguro { background-color: #d1e7dd; border-color: #198754; color: #0f5132; }
     input:checked + .lbl-indeciso { background-color: #fff3cd; border-color: #ffc107; color: #664d03; }
@@ -158,16 +157,27 @@
     };
 
     function cargarDatosDesdeAppSheet() {
-      fetch(`https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/${TABLA_NAME}/Action`, {
+      const url = "https://api.appsheet.com/api/v2/apps/" + APP_ID + "/tables/" + TABLA_NAME + "/Action";
+      
+      fetch(url, {
         method: "POST",
-        headers: { "applicationAccessKey": APP_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ "Action": "Find", "Properties": { "Locale": "es-CL" }, "Rows": [] })
+        headers: {
+          "applicationAccessKey": APP_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "Action": "Find",
+          "Properties": { "Locale": "es-CL" },
+          "Rows": []
+        })
       })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("HTTP error " + res.status);
+        return res.json();
+      })
       .then(data => {
         if (Array.isArray(data)) {
           rawData = data.map(m => {
-            // Mapeamos el campo virtual 'SEMAFORO' basado en qué columna individual tiene la "X"
             if (m.SEGURO && m.SEGURO.toUpperCase().trim() === 'X') m.SEMAFORO = 'SEGURO';
             else if (m.INDECISO && m.INDECISO.toUpperCase().trim() === 'X') m.SEMAFORO = 'INDECISO';
             else if (m.OPOSICION && m.OPOSICION.toUpperCase().trim() === 'X') m.SEMAFORO = 'OPOSICION';
@@ -177,10 +187,13 @@
           });
           render(rawData);
         } else {
-          alert("Error en la estructura de datos.");
+          alert("Error: La respuesta de la API no es un listado válido.");
         }
       })
-      .catch(err => alert("Error al conectar: " + err));
+      .catch(err => {
+        console.error(err);
+        alert("Error al conectar: " + err.message);
+      });
     }
 
     function obtenerClaseSemaforo(estado) {
@@ -248,7 +261,6 @@
     }
 
     function habilitarEdicion() {
-      // Marcamos el botón correcto de acuerdo a la "X" actual
       desmarcarSemaforos();
       if (milActual.SEMAFORO === 'SEGURO') document.getElementById('check-seguro').checked = true;
       if (milActual.SEMAFORO === 'INDECISO') document.getElementById('check-indeciso').checked = true;
@@ -274,11 +286,9 @@
     }
 
     function guardarCambiosAppSheet() {
-      // Buscamos cuál botón radial fue seleccionado
       const elementoSeleccionado = document.querySelector('input[name="semaforo_radio"]:checked');
       const valorSemaforo = elementoSeleccionado ? elementoSeleccionado.value : "";
       
-      // Armamos el objeto enviando "X" solo al campo correspondiente
       let filaUpdate = {
         "ID": milActual.ID,
         "DOMICILIO": document.getElementById('edit-domicilio').value,
@@ -294,12 +304,24 @@
       const contenedorForm = document.getElementById('formulario-edicion');
       contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Sincronizando con base de datos...</p></div>';
 
-      fetch(`https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/${TABLA_NAME}/Action`, {
+      const url = "https://api.appsheet.com/api/v2/apps/" + APP_ID + "/tables/" + TABLA_NAME + "/Action";
+
+      fetch(url, {
         method: "POST",
-        headers: { "applicationAccessKey": APP_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ "Action": "Edit", "Properties": { "Locale": "es-CL" }, "Rows": [ filaUpdate ] })
+        headers: {
+          "applicationAccessKey": APP_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "Action": "Edit",
+          "Properties": { "Locale": "es-CL" },
+          "Rows": [ filaUpdate ]
+        })
       })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("HTTP error " + res.status);
+        return res.json();
+      })
       .then(respuestaAPI => {
         const index = rawData.findIndex(m => m.ID.toString().trim() === milActual.ID.toString().trim());
         if (index !== -1) {
@@ -320,7 +342,7 @@
         alert("¡Guardado e inyectado correctamente!");
       })
       .catch(err => {
-        alert("Fallo al guardar: " + err);
+        alert("Fallo al guardar: " + err.message);
         location.reload();
       });
     }
