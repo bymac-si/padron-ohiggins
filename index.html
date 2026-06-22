@@ -136,53 +136,47 @@
         .catch(err => alert("Error al cargar datos públicos: " + err));
     }
 
-    // CORRECCIÓN CENTRAL: Parseador robusto carácter por carácter para soportar nombres y direcciones con espacios completos
-    function parsearCSV(texto) {
-      let lineas = texto.split(/\r?\n/);
-      if (lineas.length === 0) return [];
-      
-      let headers = lineas.shift().split(",").map(h => h.replace(/"/g, '').trim());
-      let resultado = [];
+    // PARSEADOR REPARADO: Soporta nombres completos, comas internas y textos largos sin recortar
+function parsearCSV(texto) {
+  let lineas = texto.split(/\r?\n/);
+  if (lineas.length === 0) return [];
+  
+  // Limpiamos las cabeceras eliminando comillas y espacios externos
+  let headers = lineas.shift().split(",").map(h => h.replace(/["']/g, '').trim());
+  let resultado = [];
 
-      for (let i = 0; i < lineas.length; i++) {
-        let linea = lineas[i].trim();
-        if (linea === "") continue;
+  for (let i = 0; i < lineas.length; i++) {
+    let linea = lineas[i].trim();
+    if (linea === "") continue;
 
-        let columnas = [];
-        let dentroDeComillas = false;
-        let celdaActual = "";
-
-        for (let j = 0; j < linea.length; j++) {
-          let char = linea[j];
-          if (char === '"') {
-            dentroDeComillas = !dentroDeComillas;
-          } else if (char === ',' && !dentroDeComillas) {
-            columnas.push(celdaActual.trim());
-            celdaActual = "";
-          } else {
-            celdaActual += char;
-          }
-        }
-        columnas.push(celdaActual.trim()); // Inyectamos la última celda de la fila
-
-        let obj = {};
-        headers.forEach((h, idx) => {
-          obj[h] = columnas[idx] !== undefined ? columnas[idx] : "";
-        });
-
-        // Verificación de semáforo limpia
-        if (obj.SEGURO && obj.SEGURO.toUpperCase() === 'X') obj.SEMAFORO = 'SEGURO';
-        else if (obj.INDECISO && obj.INDECISO.toUpperCase() === 'X') obj.SEMAFORO = 'INDECISO';
-        else if (obj.OPOSICION && obj.OPOSICION.toUpperCase() === 'X') obj.SEMAFORO = 'OPOSICION';
-        else if (obj['NO VOTA'] && obj['NO VOTA'].toUpperCase() === 'X') obj.SEMAFORO = 'NO VOTA';
-        else obj.SEMAFORO = '';
-
-        resultado.push(obj);
-      }
-      return resultado;
+    // Expresión regular que separa por comas pero IGNORA las comas que estén dentro de textos entrecomillados
+    let columnas = [];
+    let regex = /("([^"]*)"|([^,]+))/g;
+    let match;
+    
+    while ((match = regex.exec(linea)) !== null) {
+      // Si el texto venía entrecomillado usamos el grupo 2, si no, el grupo 3
+      let valorCelda = match[2] !== undefined ? match[2] : match[3];
+      columnas.push(valorCelda ? valorCelda.trim() : "");
     }
 
-    function obtenerClaseSemaforo(estado) {
+    let obj = {};
+    headers.forEach((h, idx) => {
+      // Blindaje: si la columna no existe en esta fila, se deja vacía en lugar de 'undefined'
+      obj[h] = columnas[idx] !== undefined ? columnas[idx] : "";
+    });
+
+    // Verificación y consistencia del semáforo político
+    if (obj.SEGURO && obj.SEGURO.toUpperCase() === 'X') obj.SEMAFORO = 'SEGURO';
+    else if (obj.INDECISO && obj.INDECISO.toUpperCase() === 'X') obj.SEMAFORO = 'INDECISO';
+    else if (obj.OPOSICION && obj.OPOSICION.toUpperCase() === 'X') obj.SEMAFORO = 'OPOSICION';
+    else if (obj['NO VOTA'] && obj['NO VOTA'].toUpperCase() === 'X') obj.SEMAFORO = 'NO VOTA';
+    else obj.SEMAFORO = '';
+
+    resultado.push(obj);
+  }
+  return resultado;
+}    function obtenerClaseSemaforo(estado) {
       if (!estado) return '';
       const est = estado.toUpperCase().trim();
       if (est === 'SEGURO') return 'semaforo-seguro';
