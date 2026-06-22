@@ -254,19 +254,23 @@ function parsearCSV(texto) {
     }
 
     function guardarCambios() {
-      const datosModificados = {
-        ID: milActual.ID,
-        SEMAFORO: document.getElementById('edit-semaforo').value,
-        GESTIONO: document.getElementById('edit-gestiono').value,
-        TELEFONO: document.getElementById('edit-telefono').value,
-        MAIL: document.getElementById('edit-mail-input').value,
-        DOMICILIO: document.getElementById('edit-domicilio').value
-      };
+  const datosModificados = {
+    ID: milActual.ID,
+    SEMAFORO: document.getElementById('edit-semaforo').value,
+    GESTIONO: document.getElementById('edit-gestiono').value,
+    TELEFONO: document.getElementById('edit-telefono').value,
+    MAIL: document.getElementById('edit-mail-input').value,
+    DOMICILIO: document.getElementById('edit-domicilio').value
+  };
 
-      const contenedorForm = document.getElementById('formulario-edicion');
-      contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Guardando en planilla central...</p></div>';
+  const contenedorForm = document.getElementById('formulario-edicion');
+  contenedorForm.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2">Guardando en planilla central...</p></div>';
 
-      google.script.run.withSuccessHandler(() => {
+  // Ejecutamos con manejador de éxito y de error explícitos
+  google.script.run
+    .withSuccessHandler((resultado) => {
+      if (resultado === true) {
+        // Si el script retornó true, actualizamos la vista local
         const index = rawData.findIndex(m => m.ID === datosModificados.ID);
         if (index !== -1) {
           rawData[index].SEMAFORO = datosModificados.SEMAFORO;
@@ -279,10 +283,18 @@ function parsearCSV(texto) {
         cancelarEdicion(); 
         verFicha(milActual.ID);
         alert("¡Registro guardado con éxito!");
-      }).actualizarMilitante(datosModificados); 
-    }
-
-    function cargarLogs(id) {
+      } else {
+        // Si retornó un texto, es porque no encontró el RUT
+        alert("Error del servidor: " + resultado);
+        cancelarEdicion();
+      }
+    })
+    .withFailureHandler((error) => {
+      alert("Error crítico de comunicación: " + error.message);
+      cancelarEdicion();
+    })
+    .actualizarMilitante(datosModificados); 
+}    function cargarLogs(id) {
       const h = document.getElementById('historial');
       h.innerHTML = '<small>Cargando...</small>';
       google.script.run.withSuccessHandler(logs => {
