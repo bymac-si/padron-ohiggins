@@ -296,10 +296,23 @@
         body: JSON.stringify(filaUpdate)
       })
       .then(res => {
-        if (!res.ok) throw new Error("HTTP error " + res.status);
-        return res.json();
+        // BLINDAJE: Capturamos la respuesta cruda en texto primero para evitar colapsos
+        return res.text().then(text => {
+          try {
+            const json = JSON.parse(text);
+            return { ok: res.ok, status: res.status, data: json };
+          } catch(e) {
+            return { ok: false, status: res.status, errorTexto: text };
+          }
+        });
       })
-      .then(respuestaAPI => {
+      .then(resObj => {
+        if (!resObj.ok) {
+          // Si el servidor mandó un error, lo disparamos con el mensaje explícito
+          let msgError = resObj.errorTexto || JSON.stringify(resObj.data);
+          throw new Error(msgError);
+        }
+        
         const index = rawData.findIndex(m => m.ID.toString().trim() === milActual.ID.toString().trim());
         if (index !== -1) {
           rawData[index].DOMICILIO = filaUpdate.DOMICILIO || "";
@@ -319,7 +332,8 @@
         alert("¡Guardado exitoso!");
       })
       .catch(err => {
-        alert("Fallo al guardar: " + err.message);
+        // Alerta explícita que te dirá exactamente qué campo o configuración rechazó AppSheet
+        alert("AppSheet rechazó el guardado:\n" + err.message);
         cancelarEdicion();
         verFicha(milActual.ID);
       });
