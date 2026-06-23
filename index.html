@@ -156,8 +156,28 @@
 
     function cargarDatosDesdePuente() {
       fetch(URL_CONECTOR)
-      .then(res => res.json())
-      .then(data => {
+      .then(res => {
+        // BLINDAJE EN LA CARGA: Validamos si la respuesta es texto antes de parsear JSON
+        return res.text().then(text => {
+          try {
+            const json = JSON.parse(text);
+            return { ok: res.ok, data: json };
+          } catch(e) {
+            return { ok: false, errorTexto: text };
+          }
+        });
+      })
+      .then(resObj => {
+        if (!resObj.ok) {
+          let errorMsg = resObj.errorTexto || "Error desconocido";
+          // Si es una página de Google, acortamos la alerta para ver lo importante
+          if(errorMsg.includes("<!DOCTYPE html>")) {
+            errorMsg = "El conector devolvió una página HTML en lugar de datos de Militantes. Revisa que el script esté publicado como Público (Para 'Cualquiera').";
+          }
+          throw new Error(errorMsg);
+        }
+
+        const data = resObj.data;
         if (Array.isArray(data)) {
           rawData = data.map(m => {
             if (m.SEGURO && m.SEGURO.toUpperCase().trim() === 'X') m.SEMAFORO = 'SEGURO';
@@ -168,12 +188,18 @@
             return m;
           });
           render(rawData);
+        } else if (data && data.error) {
+          alert("AppSheet devolvió un error interno:\n" + data.error);
         } else {
           alert("Error: El conector no devolvió una lista válida.");
         }
       })
       .catch(err => {
-        alert("Error de comunicación con el puente: " + err.message);
+        document.getElementById('lista').innerHTML = `
+          <div class="alert alert-danger mx-2 mt-4">
+            <h5>⚠️ Error en el Conector Puente</h5>
+            <p style="font-size:0.9rem; white-space: pre-wrap;">${err.message}</p>
+          </div>`;
       });
     }
 
@@ -296,7 +322,6 @@
         body: JSON.stringify(filaUpdate)
       })
       .then(res => {
-        // BLINDAJE: Capturamos la respuesta cruda en texto primero para evitar colapsos
         return res.text().then(text => {
           try {
             const json = JSON.parse(text);
@@ -308,7 +333,6 @@
       })
       .then(resObj => {
         if (!resObj.ok) {
-          // Si el servidor mandó un error, lo disparamos con el mensaje explícito
           let msgError = resObj.errorTexto || JSON.stringify(resObj.data);
           throw new Error(msgError);
         }
@@ -332,7 +356,6 @@
         alert("¡Guardado exitoso!");
       })
       .catch(err => {
-        // Alerta explícita que te dirá exactamente qué campo o configuración rechazó AppSheet
         alert("AppSheet rechazó el guardado:\n" + err.message);
         cancelarEdicion();
         verFicha(milActual.ID);
